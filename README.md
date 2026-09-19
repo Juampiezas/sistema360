@@ -38,10 +38,10 @@ http://localhost/sistema360/
 
 ## Integrantes
 
-- Nombre del integrante 1
-- Nombre del integrante 2
-- Nombre del integrante 3
-
+- Jean Carlos Farias - 100362416
+- Albert Encarnacion - 100634972
+- Kevin Daniel Batista - 100575671
+- Miguel Elias Ramirez - 100453980
 ## Repositorio
 
 https://github.com/Juampiezas/sistema360
