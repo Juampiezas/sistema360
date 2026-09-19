@@ -1,0 +1,5 @@
+﻿.git/
+vendor/
+dompdf/vendor/
+.env
+*.log
