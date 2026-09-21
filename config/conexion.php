@@ -13,7 +13,7 @@ $conn = mysqli_connect(
 );
 
 if(!$conn){
-    die("Error de conexión");
+    die("Error de conexión: " . mysqli_connect_error());
 }
 
 ?>

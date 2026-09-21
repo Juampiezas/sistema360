@@ -87,7 +87,7 @@ $productos = mysqli_query($conn, $sql);
 
 <?php } ?>
 
-    <div class="form-box">
+    <!-- <div class="form-box">
 
         <form method="POST">
 
@@ -134,7 +134,7 @@ $productos = mysqli_query($conn, $sql);
 
         </form>
 
-    </div>
+    </div> -->
 
     <br>
 <div class="search-box">

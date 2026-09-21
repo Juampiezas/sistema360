@@ -76,6 +76,7 @@ if(isset($_POST['actualizar'])){
                 type="number"
                 step="0.01"
                 name="precio"
+                placeholder="Precio"
                 class="form-control"
                 value="<?= $row['precio'] ?>"
                 required
@@ -85,6 +86,7 @@ if(isset($_POST['actualizar'])){
                 type="number"
                 name="stock"
                 class="form-control"
+                placeholder="Stock"
                 value="<?= $row['stock'] ?>"
                 required
             >
@@ -93,6 +95,7 @@ if(isset($_POST['actualizar'])){
                 type="text"
                 name="categoria"
                 class="form-control"
+                placeholder="Categoría"
                 value="<?= $row['categoria'] ?>"
                 required
             >

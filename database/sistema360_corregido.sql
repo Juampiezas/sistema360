@@ -66,6 +66,19 @@ CREATE TABLE detalle_ventas(
     REFERENCES productos(id)
 );
 
+
+-- Compras
+
+CREATE TABLE compras (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    cantidad INT NOT NULL,
+    costo DECIMAL(10,2) NOT NULL,
+    costo_unitario DECIMAL(10,2) NOT NULL,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    producto_id INT NOT NULL,
+    proveedor_id INT NOT NULL
+);
+
 -- USUARIO ADMIN
 
 INSERT INTO usuarios(usuario, clave, rol)
