@@ -20,7 +20,7 @@ Sistema360 es un sistema de gestión empresarial desarrollado en PHP y MySQL. El
 
 El proyecto utiliza MySQL como sistema gestor de base de datos.
 
-Los archivos de la base de datos se encuentran en:
+Los archivos de la base de datos se encuentran en el directorio:
 
 database/
 
