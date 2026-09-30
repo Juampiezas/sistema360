@@ -8,34 +8,69 @@ if(!isset($_SESSION['usuario'])){
 
 include("config/conexion.php");
 
-/* AGREGAR PRODUCTO */
 
-if(isset($_POST['guardar'])){
-
-    $nombre = $_POST['nombre'];
-
-    mysqli_query(
-        $conn,
-        "INSERT INTO productos(nombre)
-        VALUES('$nombre')"
-    );
-
-    $mensaje =
-    "Producto agregado correctamente";
-
-}
 
 /* ELIMINAR PRODUCTO */
 
 if(isset($_GET['eliminar'])){
 
-    $id = $_GET['eliminar'];
+    $id = intval($_GET['eliminar']);
 
-    $delete = "DELETE FROM productos
-               WHERE id='$id'";
+    /* COMPROBAR SI EL PRODUCTO TIENE COMPRAS */
 
-    mysqli_query($conn, $delete);
+    $consultaCompras = mysqli_query(
+        $conn,
+        "SELECT COUNT(*) AS total
+         FROM compras
+         WHERE producto_id='$id'"
+    );
 
+    $resultadoCompras =
+        mysqli_fetch_assoc($consultaCompras);
+
+    /* COMPROBAR SI EL PRODUCTO TIENE VENTAS */
+
+    $consultaVentas = mysqli_query(
+        $conn,
+        "SELECT COUNT(*) AS total
+         FROM ventas
+         WHERE producto_id='$id'"
+    );
+
+    $resultadoVentas =
+        mysqli_fetch_assoc($consultaVentas);
+
+    $tieneCompras =
+        $resultadoCompras['total'] > 0;
+
+    $tieneVentas =
+        $resultadoVentas['total'] > 0;
+
+    if($tieneCompras || $tieneVentas){
+
+        $mensaje =
+            "No se puede eliminar este producto porque tiene compras o ventas registradas.";
+
+    }else{
+
+        $delete = mysqli_query(
+            $conn,
+            "DELETE FROM productos
+             WHERE id='$id'"
+        );
+
+        if($delete){
+
+            $mensaje =
+                "Producto eliminado correctamente.";
+
+        }else{
+
+            $mensaje =
+                "No se pudo eliminar el producto.";
+
+        }
+    }
 }
 
 /* LISTAR PRODUCTOS */
@@ -76,7 +111,22 @@ $productos = mysqli_query($conn, $sql);
 <div class="main">
 
     <h1>Productos</h1>
+    <?php if(isset($_GET['agregado'])){ ?>
 
+    <div class="alerta">
+        Producto agregado correctamente.
+    </div>
+
+<?php } ?>
+<a
+    href="agregar_producto.php"
+    class="btn-login"
+>
+    + Agregar Producto
+</a>
+
+<br>
+<br>
     <?php if(isset($mensaje)){ ?>
 
 <div class="alerta">
@@ -160,13 +210,6 @@ $productos = mysqli_query($conn, $sql);
 
 </div>
 
-<br>
-<input
-    type="text"
-    id="buscador"
-    class="form-control"
-    placeholder="Buscar..."
->
     <table class="tabla">
 
         <tr>
@@ -192,15 +235,21 @@ $productos = mysqli_query($conn, $sql);
 
            <td>
 
-    <?php if($row['stock'] <= 5){ ?>
+    <?php if($row['stock'] <= 0){ ?>
 
         <span class="stock-bajo">
-            <?= $row['stock'] ?>
+            <?= $row['stock'] ?> — Sin stock
+        </span>
+
+    <?php }elseif($row['stock'] <= 5){ ?>
+
+        <span class="stock-bajo">
+            <?= $row['stock'] ?> — Stock bajo
         </span>
 
     <?php }else{ ?>
 
-        <?= $row['stock'] ?>
+        <?= $row['stock'] ?> — Disponible
 
     <?php } ?>
 
@@ -217,12 +266,13 @@ $productos = mysqli_query($conn, $sql);
                     Editar
                 </a>
 
-                <a
-                    href="productos.php?eliminar=<?= $row['id'] ?>"
-                    class="btn-delete"
-                >
-                    Eliminar
-                </a>
+               <a
+    href="productos.php?eliminar=<?= $row['id'] ?>"
+    class="btn-delete"
+    onclick="return confirm('¿Seguro que deseas eliminar este producto?');"
+>
+    Eliminar
+</a> 
 
             </td>
 
@@ -233,45 +283,7 @@ $productos = mysqli_query($conn, $sql);
     </table>
 
 </div>
-<script>
 
-const buscador =
-document.getElementById("buscador");
 
-if(buscador){
-
-    buscador.addEventListener(
-        "keyup",
-        function(){
-
-            let filtro =
-            buscador.value.toLowerCase();
-
-            let filas =
-            document.querySelectorAll(".tabla tr");
-
-            filas.forEach((fila,index)=>{
-
-                if(index === 0) return;
-
-                let texto =
-                fila.innerText.toLowerCase();
-
-                fila.style.display =
-                texto.includes(filtro)
-                ? ""
-                : "none";
-
-            });
-
-        }
-    );
-
-}
-
-</script>
-
-</body>
-</html>
 </body>
 </html>
