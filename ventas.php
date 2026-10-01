@@ -1,255 +1,251 @@
 <?php
-
+ 
 session_start();
-
+ 
 if(!isset($_SESSION['usuario'])){
     header("Location: login.php");
+    exit;
 }
-
+ 
 include("config/conexion.php");
-
+ 
 /* REGISTRAR VENTA */
-
+ 
 if(isset($_POST['guardar'])){
-
-    $cliente_id = $_POST['cliente_id'];
-    $producto_id = $_POST['producto_id'];
-    $cantidad = $_POST['cantidad'];
-
+ 
+    $cliente_id  = (int)$_POST['cliente_id'];
+    $producto_id = (int)$_POST['producto_id'];
+    $cantidad    = (int)$_POST['cantidad'];
+ 
     /* OBTENER PRODUCTO */
-
-    $producto = mysqli_query(
-        $conn,
-        "SELECT * FROM productos
-        WHERE id='$producto_id'"
-    );
-
-    $rowProducto = mysqli_fetch_assoc($producto);
-
-    $precio = $rowProducto['precio'];
-
-    $stock_actual = $rowProducto['stock'];
-
-    /* VALIDAR STOCK */
-
-    /* VALIDAR CANTIDAD Y STOCK */
-
-if($cantidad <= 0){
-
-    $mensaje = "Introduce una cantidad válida.";
-    $tipo_mensaje = "error";
-
-}elseif($cantidad > $stock_actual){
-
-    $mensaje = "Stock insuficiente. Solo hay $stock_actual unidades disponibles.";
-    $tipo_mensaje = "error";
-
-}else{
-
-    $total = $precio * $cantidad;
-
-    /* GUARDAR VENTA */
-
-    mysqli_query(
-        $conn,
-        "INSERT INTO ventas(
-            cliente_id,
-            producto_id,
-            cantidad,
-            total
-        )
-        VALUES(
-            '$cliente_id',
-            '$producto_id',
-            '$cantidad',
-            '$total'
-        )"
-    );
-
-    /* ACTUALIZAR STOCK */
-
-    $nuevo_stock = $stock_actual - $cantidad;
-
-    mysqli_query(
-        $conn,
-        "UPDATE productos SET
-        stock='$nuevo_stock'
-        WHERE id='$producto_id'"
-    );
-
-    $mensaje = "Venta registrada correctamente.";
-    $tipo_mensaje = "exito";
+ 
+    $stmt = mysqli_prepare($conn, "SELECT precio, stock FROM productos WHERE id = ?");
+    mysqli_stmt_bind_param($stmt, "i", $producto_id);
+    mysqli_stmt_execute($stmt);
+    $rowProducto = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+ 
+    if(!$rowProducto){
+ 
+        $mensaje = "El producto seleccionado no existe.";
+        $tipo_mensaje = "error";
+ 
+    }else{
+ 
+        $precio       = $rowProducto['precio'];
+        $stock_actual = $rowProducto['stock'];
+ 
+        /* VALIDAR CANTIDAD Y STOCK */
+ 
+        if($cantidad <= 0){
+ 
+            $mensaje = "Introduce una cantidad válida.";
+            $tipo_mensaje = "error";
+ 
+        }elseif($cantidad > $stock_actual){
+ 
+            $mensaje = "Stock insuficiente. Solo hay $stock_actual unidades disponibles.";
+            $tipo_mensaje = "error";
+ 
+        }else{
+ 
+            $total = $precio * $cantidad;
+ 
+            mysqli_begin_transaction($conn);
+ 
+            try{
+ 
+                /* GUARDAR VENTA */
+ 
+                $stmt = mysqli_prepare($conn, "INSERT INTO ventas(cliente_id, total) VALUES(?, ?)");
+                mysqli_stmt_bind_param($stmt, "id", $cliente_id, $total);
+                mysqli_stmt_execute($stmt);
+ 
+                $venta_id = mysqli_insert_id($conn);
+ 
+                /* GUARDAR DETALLE */
+ 
+                $stmt = mysqli_prepare($conn, "INSERT INTO detalle_ventas(venta_id, producto_id, cantidad, subtotal) VALUES(?, ?, ?, ?)");
+                mysqli_stmt_bind_param($stmt, "iiid", $venta_id, $producto_id, $cantidad, $total);
+                mysqli_stmt_execute($stmt);
+ 
+                /* ACTUALIZAR STOCK */
+ 
+                $stmt = mysqli_prepare($conn, "UPDATE productos SET stock = stock - ? WHERE id = ? AND stock >= ?");
+                mysqli_stmt_bind_param($stmt, "iii", $cantidad, $producto_id, $cantidad);
+                mysqli_stmt_execute($stmt);
+ 
+                if(mysqli_stmt_affected_rows($stmt) === 0){
+                    throw new Exception("Stock insuficiente.");
+                }
+ 
+                mysqli_commit($conn);
+ 
+                $mensaje = "Venta registrada correctamente.";
+                $tipo_mensaje = "exito";
+ 
+            }catch(Throwable $e){
+ 
+                mysqli_rollback($conn);
+ 
+                $mensaje = "Error al registrar la venta: " . $e->getMessage();
+                $tipo_mensaje = "error";
+            }
+        }
+    }
 }
-
-}
-
+ 
 /* LISTAR CLIENTES */
-
-$clientes = mysqli_query(
-    $conn,
-    "SELECT * FROM clientes"
-);
-
+ 
+$clientes = mysqli_query($conn, "SELECT * FROM clientes");
+ 
 /* LISTAR PRODUCTOS */
-
-$productos = mysqli_query(
-    $conn,
-    "SELECT * FROM productos"
-);
-
+ 
+$productos = mysqli_query($conn, "SELECT * FROM productos");
+ 
 /* HISTORIAL */
-
-$ventas = mysqli_query(
-    $conn,
+ 
+$ventas = mysqli_query($conn,
     "SELECT ventas.id,
             clientes.nombre AS cliente,
             productos.nombre AS producto,
-            ventas.cantidad,
+            detalle_ventas.cantidad,
             ventas.total,
             ventas.fecha
-
+ 
     FROM ventas
-
+ 
     INNER JOIN clientes
     ON ventas.cliente_id = clientes.id
-
+ 
+    INNER JOIN detalle_ventas
+    ON detalle_ventas.venta_id = ventas.id
+ 
     INNER JOIN productos
-    ON ventas.producto_id = productos.id
-
+    ON detalle_ventas.producto_id = productos.id
+ 
     ORDER BY ventas.id DESC"
 );
-
+ 
+if(!$ventas){
+    die("Error en historial de ventas: " . mysqli_error($conn));
+}
+ 
 ?>
-
+ 
 <!DOCTYPE html>
 <html lang="es">
 <head>
-
+ 
 <meta charset="UTF-8">
-
+ 
 <title>Ventas</title>
-
+ 
 <link rel="stylesheet" href="css/styles.css">
-
+ 
 </head>
 <body>
-
+ 
 <?php include("includes/sidebar.php"); ?>
-
+ 
 <div class="main">
-
+ 
     <h1>Ventas</h1>
+ 
 <?php if(isset($mensaje)){ ?>
-
+ 
     <div style="
         padding: 12px;
         margin-bottom: 15px;
         border-radius: 6px;
-        background:
-            <?= $tipo_mensaje === 'exito'
-                ? '#d4edda'
-                : '#f8d7da' ?>;
-        color:
-            <?= $tipo_mensaje === 'exito'
-                ? '#155724'
-                : '#721c24' ?>;
+        background: <?= $tipo_mensaje === 'exito' ? '#d4edda' : '#f8d7da' ?>;
+        color: <?= $tipo_mensaje === 'exito' ? '#155724' : '#721c24' ?>;
     ">
-
+ 
         <?= htmlspecialchars($mensaje) ?>
-
+ 
     </div>
-
+ 
 <?php } ?>
+ 
     <div class="form-box">
-
+ 
         <form method="POST">
-
+ 
+            <select name="cliente_id" class="form-control" required>
+ 
+                <option value="">Seleccionar Cliente</option>
+ 
+                <?php while($cliente = mysqli_fetch_assoc($clientes)){ ?>
+ 
+                    <option value="<?= $cliente['id'] ?>">
+                        <?= htmlspecialchars($cliente['nombre']) ?>
+                    </option>
+ 
+                <?php } ?>
+ 
+            </select>
+ 
             <select
-                name="cliente_id"
+                name="producto_id"
+                id="producto"
                 class="form-control"
+                onchange="mostrarStock()"
                 required
             >
-
-                <option value="">
-                    Seleccionar Cliente
-                </option>
-
-                <?php while($cliente = mysqli_fetch_assoc($clientes)){ ?>
-
-                    <option value="<?= $cliente['id'] ?>">
-
-                        <?= $cliente['nombre'] ?>
-
+ 
+                <option value="">Seleccionar Producto</option>
+ 
+                <?php while($producto = mysqli_fetch_assoc($productos)){ ?>
+ 
+                    <option
+                        value="<?= $producto['id'] ?>"
+                        data-stock="<?= $producto['stock'] ?>"
+                    >
+                        <?= htmlspecialchars($producto['nombre']) ?>
                     </option>
-
+ 
                 <?php } ?>
-
+ 
             </select>
-
-            <select
-    name="producto_id"
-    id="producto"
-    class="form-control"
-    onchange="mostrarStock()"
-    required
->
-
-    <option value="">
-        Seleccionar Producto
-    </option>
-
-    <?php while($producto = mysqli_fetch_assoc($productos)){ ?>
-
-        <option
-            value="<?= $producto['id'] ?>"
-            data-stock="<?= $producto['stock'] ?>"
-        >
-            <?= htmlspecialchars($producto['nombre']) ?>
-        </option>
-
-    <?php } ?>
-
-</select>
-
-<input
-    type="text"
-    id="stock_disponible"
-    class="form-control"
-    placeholder="Stock disponible"
-    readonly
->
-
+ 
+            <input
+                type="text"
+                id="stock_disponible"
+                class="form-control"
+                placeholder="Stock disponible"
+                readonly
+            >
+ 
             <input
                 type="number"
                 name="cantidad"
                 class="form-control"
                 placeholder="Cantidad"
+                min="1"
                 required
             >
-
-            <button
-                type="submit"
-                name="guardar"
-                class="btn-login"
-            >
+ 
+            <button type="submit" name="guardar" class="btn-login">
                 Registrar Venta
             </button>
-
+ 
         </form>
-
+ 
     </div>
-
+ 
     <br>
+ 
     <input
-    type="text"
-    id="buscador"
-    class="form-control"
-    placeholder="Buscar..."
->
-    <table class="tabla">
-
+        type="text"
+        id="buscador"
+        class="form-control"
+        placeholder="Buscar..."
+    >
+ 
+    <table class="tabla" id="tabla_ventas">
+ 
         <tr>
-
+ 
             <th>ID</th>
             <th>Cliente</th>
             <th>Producto</th>
@@ -257,69 +253,67 @@ $ventas = mysqli_query(
             <th>Total</th>
             <th>Fecha</th>
             <th>Factura</th>
-
+ 
         </tr>
-
+ 
         <?php while($venta = mysqli_fetch_assoc($ventas)){ ?>
-
+ 
         <tr>
-
+ 
             <td><?= $venta['id'] ?></td>
-
-            <td><?= $venta['cliente'] ?></td>
-
-            <td><?= $venta['producto'] ?></td>
-
+ 
+            <td><?= htmlspecialchars($venta['cliente']) ?></td>
+ 
+            <td><?= htmlspecialchars($venta['producto']) ?></td>
+ 
             <td><?= $venta['cantidad'] ?></td>
-
+ 
             <td>$<?= $venta['total'] ?></td>
-
+ 
             <td><?= $venta['fecha'] ?></td>
+ 
             <td>
-
-    <a
-        href="factura.php?id=<?= $venta['id'] ?>"
-        class="btn-edit"
-    >
-        Ver Factura
-    </a>
-
-</td>
-
+                <a href="factura.php?id=<?= $venta['id'] ?>" class="btn-edit">
+                    Ver Factura
+                </a>
+            </td>
+ 
         </tr>
-
+ 
         <?php } ?>
-
+ 
     </table>
-
+ 
 </div>
+ 
 <script>
-
+ 
 function mostrarStock() {
-
-    const select =
-        document.getElementById("producto");
-
-    const campoStock =
-        document.getElementById("stock_disponible");
-
-    const opcion =
-        select.options[select.selectedIndex];
-
+ 
+    const select = document.getElementById("producto");
+    const campoStock = document.getElementById("stock_disponible");
+    const opcion = select.options[select.selectedIndex];
+ 
     if (select.value === "") {
-
         campoStock.value = "";
         return;
-
     }
-
-    const stock =
-        opcion.getAttribute("data-stock");
-
-    campoStock.value =
-        "Stock disponible: " + stock;
+ 
+    campoStock.value = "Stock disponible: " + opcion.getAttribute("data-stock");
 }
-
+ 
+/* BUSCADOR */
+ 
+document.getElementById("buscador").addEventListener("input", function () {
+ 
+    const texto = this.value.toLowerCase();
+    const filas = document.querySelectorAll("#tabla_ventas tr:not(:first-child)");
+ 
+    filas.forEach(function (fila) {
+        fila.style.display = fila.textContent.toLowerCase().includes(texto) ? "" : "none";
+    });
+});
+ 
 </script>
 </body>
 </html>
