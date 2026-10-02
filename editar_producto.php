@@ -4,6 +4,7 @@ session_start();
 
 if(!isset($_SESSION['usuario'])){
     header("Location: login.php");
+    exit;
 }
 
 include("config/conexion.php");
@@ -19,24 +20,41 @@ $row = mysqli_fetch_assoc($resultado);
 
 if(isset($_POST['actualizar'])){
 
-    $nombre = $_POST['nombre'];
-    $precio = $_POST['precio'];
-    $stock = $_POST['stock'];
-    $categoria = $_POST['categoria'];
+    $nombre = trim($_POST['nombre']);
+    $precio = floatval($_POST['precio']);
+    $stock = intval($_POST['stock']);
+    $categoria = trim($_POST['categoria']);
 
-    $update = "UPDATE productos SET
+    if($nombre == ""){
 
-                nombre='$nombre',
-                precio='$precio',
-                stock='$stock',
-                categoria='$categoria'
+        $mensaje = "El nombre del producto es obligatorio.";
 
-                WHERE id='$id'";
+    }elseif($categoria == ""){
 
-    mysqli_query($conn, $update);
+        $mensaje = "La categoría es obligatoria.";
 
-    header("Location: productos.php");
+    }elseif($precio < 0){
 
+        $mensaje = "El precio no puede ser negativo.";
+
+    }elseif($stock < 0){
+
+        $mensaje = "El stock no puede ser negativo.";
+
+    }else{
+
+        $update = "UPDATE productos SET
+                    nombre='$nombre',
+                    precio='$precio',
+                    stock='$stock',
+                    categoria='$categoria'
+                    WHERE id='$id'";
+
+        mysqli_query($conn, $update);
+
+        header("Location: productos.php");
+        exit;
+    }
 }
 
 ?>
@@ -48,7 +66,13 @@ if(isset($_POST['actualizar'])){
 <meta charset="UTF-8">
 
 <title>Editar Producto</title>
+<?php if(isset($mensaje)){ ?>
 
+    <div class="alerta">
+        <?= htmlspecialchars($mensaje) ?>
+    </div>
+
+<?php } ?>
 <link rel="stylesheet" href="css/styles.css">
 
 </head>
@@ -75,6 +99,7 @@ if(isset($_POST['actualizar'])){
             <input
                 type="number"
                 step="0.01"
+                min="0"
                 name="precio"
                 placeholder="Precio"
                 class="form-control"
@@ -84,6 +109,7 @@ if(isset($_POST['actualizar'])){
 
             <input
                 type="number"
+                min="0"
                 name="stock"
                 class="form-control"
                 placeholder="Stock"
