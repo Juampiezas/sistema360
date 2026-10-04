@@ -201,11 +201,12 @@ $ventas = mysqli_query(
     <?php while($producto = mysqli_fetch_assoc($productos)){ ?>
 
         <option
-            value="<?= $producto['id'] ?>"
-            data-stock="<?= $producto['stock'] ?>"
-        >
-            <?= htmlspecialchars($producto['nombre']) ?>
-        </option>
+    value="<?= $producto['id'] ?>"
+    data-stock="<?= $producto['stock'] ?>"
+    data-precio="<?= $producto['precio'] ?>"
+>
+    <?= htmlspecialchars($producto['nombre']) ?>
+</option>
 
     <?php } ?>
 
@@ -218,14 +219,31 @@ $ventas = mysqli_query(
     placeholder="Stock disponible"
     readonly
 >
+<input
+    type="text"
+    id="precio_unitario"
+    class="form-control"
+    placeholder="Precio unitario"
+    readonly
+>
 
             <input
-                type="number"
-                name="cantidad"
-                class="form-control"
-                placeholder="Cantidad"
-                required
-            >
+    type="number"
+    name="cantidad"
+    id="cantidad"
+    class="form-control"
+    placeholder="Cantidad"
+    min="1"
+    oninput="calcularTotal()"
+    required
+>
+<input
+    type="text"
+    id="precio_total"
+    class="form-control"
+    placeholder="Precio total"
+    readonly
+>
 
             <button
                 type="submit"
@@ -244,9 +262,9 @@ $ventas = mysqli_query(
     type="text"
     id="buscador"
     class="form-control"
-    placeholder="Buscar..."
+    placeholder="Buscar venta por ID, cliente o producto..."
 >
-    <table class="tabla">
+    <table class="tabla" id="tablaVentas">
 
         <tr>
 
@@ -303,23 +321,127 @@ function mostrarStock() {
     const campoStock =
         document.getElementById("stock_disponible");
 
+    const campoPrecio =
+        document.getElementById("precio_unitario");
+
     const opcion =
         select.options[select.selectedIndex];
 
     if (select.value === "") {
 
         campoStock.value = "";
-        return;
+        campoPrecio.value = "";
 
+        calcularTotal();
+
+        return;
     }
 
     const stock =
         opcion.getAttribute("data-stock");
 
+    const precio =
+        parseFloat(
+            opcion.getAttribute("data-precio")
+        );
+
     campoStock.value =
         "Stock disponible: " + stock;
+
+    campoPrecio.value =
+        "Precio unitario: $" +
+        precio.toLocaleString(
+            "en-US",
+            {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }
+        );
+
+    calcularTotal();
 }
 
+
+function calcularTotal() {
+
+    const select =
+        document.getElementById("producto");
+
+    const cantidad =
+        parseFloat(
+            document.getElementById("cantidad").value
+        );
+
+    const campoTotal =
+        document.getElementById("precio_total");
+
+    if (
+        select.value === "" ||
+        isNaN(cantidad) ||
+        cantidad <= 0
+    ) {
+
+        campoTotal.value = "";
+        return;
+    }
+
+    const opcion =
+        select.options[select.selectedIndex];
+
+    const precio =
+        parseFloat(
+            opcion.getAttribute("data-precio")
+        );
+
+    const total =
+        precio * cantidad;
+
+    campoTotal.value =
+        "Precio total: $" +
+        total.toLocaleString(
+            "en-US",
+            {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }
+        );
+}
+const buscador = document.getElementById("buscador");
+
+buscador.addEventListener("input", function() {
+
+    const texto =
+        this.value.toLowerCase().trim();
+
+    const filas =
+        document.querySelectorAll(
+            "#tablaVentas tr:not(:first-child)"
+        );
+
+    filas.forEach(function(fila) {
+
+        const id =
+    fila.cells[0].textContent.toLowerCase();
+
+const cliente =
+    fila.cells[1].textContent.toLowerCase();
+
+const producto =
+    fila.cells[2].textContent.toLowerCase();
+
+if (
+    id.includes(texto) ||
+    cliente.includes(texto) ||
+    producto.includes(texto)
+) {
+            fila.style.display = "";
+        } else {
+            fila.style.display = "none";
+        }
+
+    });
+
+});
 </script>
 </body>
 </html>

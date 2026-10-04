@@ -150,11 +150,12 @@ $clientes = mysqli_query(
                 </a>
 
                 <a
-                    href="clientes.php?eliminar=<?= $row['id'] ?>"
-                    class="btn-delete"
-                >
-                    Eliminar
-                </a>
+    href="clientes.php?eliminar=<?= $row['id'] ?>"
+    class="btn-delete"
+    onclick="return confirm('¿Seguro que deseas eliminar este cliente?');"
+>
+    Eliminar
+</a>
 
             </td>
 

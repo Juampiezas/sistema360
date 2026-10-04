@@ -303,12 +303,12 @@ $compras = mysqli_query(
         type="text"
         id="buscador"
         class="form-control"
-        placeholder="Buscar..."
+        placeholder="Buscar compra por ID, proveedor o producto..."
     >
 
     <!-- HISTORIAL -->
 
-    <table class="tabla">
+    <table class="tabla" id="tablaCompras">
 
         <tr>
 
@@ -765,70 +765,43 @@ function registrarCompra() {
 
     });
 }
-function registrarCompra() {
 
-    const proveedor =
-        document.querySelector('select[name="proveedor"]').value;
+const buscador = document.getElementById("buscador");
 
-    if (proveedor === "") {
-        alert("Selecciona un proveedor.");
-        return;
-    }
+buscador.addEventListener("input", function() {
 
-    if (carrito.length === 0) {
-        alert("El carrito está vacío.");
-        return;
-    }
+    const texto =
+        this.value.toLowerCase().trim();
 
-    const datos = {
-        proveedor_id: proveedor,
-        productos: carrito
-    };
+    const filas =
+        document.querySelectorAll(
+            "#tablaCompras tr:not(:first-child)"
+        );
 
-    fetch("registrar_compra.php", {
+    filas.forEach(function(fila) {
 
-        method: "POST",
+        const id =
+            fila.cells[0].textContent.toLowerCase();
 
-        headers: {
-            "Content-Type": "application/json"
-        },
+        const proveedor =
+            fila.cells[1].textContent.toLowerCase();
 
-        body: JSON.stringify(datos)
+        const producto =
+            fila.cells[2].textContent.toLowerCase();
 
-    })
-    .then(response => response.json())
-
-    .then(resultado => {
-
-        if (resultado.success) {
-
-            alert("Compra registrada correctamente.");
-
-            carrito = [];
-
-            mostrarCarrito();
-
-            window.location.reload();
-
+        if (
+            id.includes(texto) ||
+            proveedor.includes(texto) ||
+            producto.includes(texto)
+        ) {
+            fila.style.display = "";
         } else {
-
-            alert(
-                "Error: " +
-                (resultado.message || "No se pudo registrar la compra.")
-            );
-
+            fila.style.display = "none";
         }
 
-    })
-
-    .catch(error => {
-
-        console.error(error);
-
-        alert("Error al registrar la compra.");
-
     });
-}
+
+});
 </script>
 </body>
 </html>

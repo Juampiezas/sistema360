@@ -20,8 +20,8 @@ $row = mysqli_fetch_assoc($resultado);
 if(isset($_POST['actualizar'])){
 
     $nombre = $_POST['nombre'];
-    $telefono = $_POST['telefono'];
-    $direccion = $_POST['direccion'];
+$telefono = $_POST['telefono'];
+$empresa = $_POST['empresa'];
 
     mysqli_query(
         $conn,
@@ -35,6 +35,7 @@ if(isset($_POST['actualizar'])){
     );
 
     header("Location: proveedores.php");
+exit;
 
 }
 
