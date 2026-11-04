@@ -140,11 +140,12 @@ $proveedores = mysqli_query(
                 </a>
 
                 <a
-                    href="proveedores.php?eliminar=<?= $row['id'] ?>"
-                    class="btn-delete"
-                >
-                    Eliminar
-                </a>
+    href="proveedores.php?eliminar=<?= $row['id'] ?>"
+    class="btn-delete"
+    onclick="return confirm('¿Seguro que deseas eliminar este proveedor?');"
+>
+    Eliminar
+</a>
 
             </td>
 
