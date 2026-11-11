@@ -4,3 +4,4 @@ dompdf/vendor/
 .env
 *.log
 .vscode
+config/credenciales.php
