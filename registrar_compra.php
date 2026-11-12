@@ -6,7 +6,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 include("config/conexion.php");
 
-/*
+/**
  * Verificar sesión
  */
 if (!isset($_SESSION['usuario'])) {
@@ -20,7 +20,7 @@ if (!isset($_SESSION['usuario'])) {
     exit;
 }
 
-/*
+/**
  * Leer JSON enviado por compras.php
  */
 $entrada = file_get_contents("php://input");
@@ -35,13 +35,13 @@ if (!is_array($datos)) {
     exit;
 }
 
-/*
+/**
  * Obtener proveedor y productos
  */
 $proveedor_id = intval($datos['proveedor_id'] ?? 0);
 $productos = $datos['productos'] ?? [];
 
-/*
+/**
  * Validaciones
  */
 if ($proveedor_id <= 0) {
@@ -62,7 +62,7 @@ if (!is_array($productos) || count($productos) === 0) {
     exit;
 }
 
-/*
+/**
  * Iniciar transacción
  */
 mysqli_begin_transaction($conn);
@@ -77,7 +77,7 @@ try {
             $item['costo_unitario'] ?? 0
         );
 
-        /*
+        /**
          * Validar producto
          */
         if (
@@ -90,7 +90,7 @@ try {
             );
         }
 
-        /*
+        /**
          * Verificar que el producto realmente existe
          */
         $stmtProducto = mysqli_prepare(
@@ -99,6 +99,13 @@ try {
              FROM productos
              WHERE id = ?"
         );
+
+        if (!$stmtProducto) {
+            throw new Exception(
+                "Error preparando validación del producto: " .
+                mysqli_error($conn)
+            );
+        }
 
         mysqli_stmt_bind_param(
             $stmtProducto,
@@ -112,6 +119,8 @@ try {
             mysqli_stmt_get_result($stmtProducto);
 
         if (mysqli_num_rows($resultadoProducto) === 0) {
+            mysqli_stmt_close($stmtProducto);
+
             throw new Exception(
                 "Uno de los productos no existe."
             );
@@ -119,12 +128,12 @@ try {
 
         mysqli_stmt_close($stmtProducto);
 
-        /*
+        /**
          * Calcular total de este producto
          */
         $total = $cantidad * $costo_unitario;
 
-        /*
+        /**
          * Registrar compra
          */
         $stmtCompra = mysqli_prepare(
@@ -164,9 +173,14 @@ try {
             );
         }
 
+        /**
+         * Obtener ID de la compra recién registrada
+         */
+        $id_compra = mysqli_insert_id($conn);
+
         mysqli_stmt_close($stmtCompra);
 
-        /*
+        /**
          * Aumentar stock
          */
         $stmtStock = mysqli_prepare(
@@ -175,6 +189,13 @@ try {
              SET stock = stock + ?
              WHERE id = ?"
         );
+
+        if (!$stmtStock) {
+            throw new Exception(
+                "Error preparando actualización de stock: " .
+                mysqli_error($conn)
+            );
+        }
 
         mysqli_stmt_bind_param(
             $stmtStock,
@@ -191,9 +212,49 @@ try {
         }
 
         mysqli_stmt_close($stmtStock);
+
+        /**
+         * Registrar movimiento de inventario
+         */
+        $stmtMovimiento = mysqli_prepare(
+            $conn,
+            "INSERT INTO movimientos_inventario
+            (
+                producto_id,
+                tipo_movimiento,
+                cantidad,
+                referencia_id,
+                origen
+            )
+            VALUES (?, 'entrada', ?, ?, 'compra')"
+        );
+
+        if (!$stmtMovimiento) {
+            throw new Exception(
+                "Error preparando el movimiento de inventario: " .
+                mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmtMovimiento,
+            "iii",
+            $producto_id,
+            $cantidad,
+            $id_compra
+        );
+
+        if (!mysqli_stmt_execute($stmtMovimiento)) {
+            throw new Exception(
+                "Error registrando el movimiento de inventario: " .
+                mysqli_stmt_error($stmtMovimiento)
+            );
+        }
+
+        mysqli_stmt_close($stmtMovimiento);
     }
 
-    /*
+    /**
      * Todo salió correctamente
      */
     mysqli_commit($conn);
@@ -205,7 +266,7 @@ try {
 
 } catch (Throwable $e) {
 
-    /*
+    /**
      * Si algo falla, deshacer TODO
      */
     mysqli_rollback($conn);
