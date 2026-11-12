@@ -2,195 +2,325 @@
 
 session_start();
 
-if(!isset($_SESSION['usuario'])){
+if (!isset($_SESSION['usuario'])) {
     header("Location: login.php");
     exit;
 }
 
-include("config/conexion.php");
+include_once("config/conexion.php");
 
 /* REGISTRAR VENTA */
 
-if(isset($_POST['guardar'])){
+if (isset($_POST['guardar'])) {
 
-    $cliente_id  = (int)$_POST['cliente_id'];
-    $producto_id = (int)$_POST['producto_id'];
-    $cantidad    = (int)$_POST['cantidad'];
+    $cliente_id = (int)($_POST['cliente_id'] ?? 0);
+    $producto_id = (int)($_POST['producto_id'] ?? 0);
+    $cantidad = (int)($_POST['cantidad'] ?? 0);
 
-    /* OBTENER PRODUCTO */
+    /* VALIDACIONES BÁSICAS */
 
-    $stmt = mysqli_prepare(
-        $conn,
-        "SELECT precio, stock
-         FROM productos
-         WHERE id = ?"
-    );
+    if ($cliente_id <= 0 || $producto_id <= 0) {
 
-    mysqli_stmt_bind_param(
-        $stmt,
-        "i",
-        $producto_id
-    );
-
-    mysqli_stmt_execute($stmt);
-
-    $rowProducto =
-        mysqli_fetch_assoc(
-            mysqli_stmt_get_result($stmt)
-        );
-
-    if(!$rowProducto){
-
-        $mensaje =
-            "El producto seleccionado no existe.";
-
+        $mensaje = "Debe seleccionar un cliente y un producto.";
         $tipo_mensaje = "error";
 
-    }else{
+    } elseif ($cantidad <= 0) {
 
-        $precio =
-            $rowProducto['precio'];
+        $mensaje = "Introduce una cantidad válida.";
+        $tipo_mensaje = "error";
 
-        $stock_actual =
-            $rowProducto['stock'];
+    } else {
 
-        /* VALIDAR CANTIDAD Y STOCK */
+        /* OBTENER PRODUCTO */
 
-        if($cantidad <= 0){
+        $stmtProducto = mysqli_prepare(
+            $conn,
+            "SELECT precio, stock
+             FROM productos
+             WHERE id = ?"
+        );
 
-            $mensaje =
-                "Introduce una cantidad válida.";
+        if (!$stmtProducto) {
 
+            $mensaje = "No fue posible consultar el producto.";
             $tipo_mensaje = "error";
 
-        }elseif($cantidad > $stock_actual){
+            error_log(
+                "Error preparando consulta de producto en ventas: " .
+                mysqli_error($conn)
+            );
 
-            $mensaje =
-                "Stock insuficiente. Solo hay $stock_actual unidades disponibles.";
+        } else {
 
-            $tipo_mensaje = "error";
+            mysqli_stmt_bind_param(
+                $stmtProducto,
+                "i",
+                $producto_id
+            );
 
-        }else{
+            if (!mysqli_stmt_execute($stmtProducto)) {
 
-            $total =
-                $precio * $cantidad;
-
-            mysqli_begin_transaction($conn);
-
-            try{
-
-                /* GUARDAR VENTA */
-
-                $stmt = mysqli_prepare(
-                    $conn,
-                    "INSERT INTO ventas(
-                        cliente_id,
-                        total
-                    )
-                    VALUES(?, ?)"
-                );
-
-                mysqli_stmt_bind_param(
-                    $stmt,
-                    "id",
-                    $cliente_id,
-                    $total
-                );
-
-                mysqli_stmt_execute($stmt);
-
-                $venta_id =
-                    mysqli_insert_id($conn);
-
-                /* GUARDAR DETALLE */
-
-                $stmt = mysqli_prepare(
-                    $conn,
-                    "INSERT INTO detalle_ventas(
-                        venta_id,
-                        producto_id,
-                        cantidad,
-                        subtotal
-                    )
-                    VALUES(?, ?, ?, ?)"
-                );
-
-                mysqli_stmt_bind_param(
-                    $stmt,
-                    "iiid",
-                    $venta_id,
-                    $producto_id,
-                    $cantidad,
-                    $total
-                );
-
-                mysqli_stmt_execute($stmt);
-
-                /* ACTUALIZAR STOCK */
-
-                $stmt = mysqli_prepare(
-                    $conn,
-                    "UPDATE productos
-                     SET stock = stock - ?
-                     WHERE id = ?
-                     AND stock >= ?"
-                );
-
-                mysqli_stmt_bind_param(
-                    $stmt,
-                    "iii",
-                    $cantidad,
-                    $producto_id,
-                    $cantidad
-                );
-
-                mysqli_stmt_execute($stmt);
-
-                if(
-                    mysqli_stmt_affected_rows($stmt)
-                    === 0
-                ){
-                    throw new Exception(
-                        "Stock insuficiente."
-                    );
-                }
-
-                mysqli_commit($conn);
-
-                $mensaje =
-                    "Venta registrada correctamente.";
-
-                $tipo_mensaje = "exito";
-
-            }catch(Throwable $e){
-
-                mysqli_rollback($conn);
-
-                $mensaje =
-                    "Error al registrar la venta: "
-                    . $e->getMessage();
-
+                $mensaje = "No fue posible consultar el producto.";
                 $tipo_mensaje = "error";
+
+                error_log(
+                    "Error ejecutando consulta de producto en ventas: " .
+                    mysqli_stmt_error($stmtProducto)
+                );
+
+                mysqli_stmt_close($stmtProducto);
+
+            } else {
+
+                $resultadoProducto =
+                    mysqli_stmt_get_result($stmtProducto);
+
+                $rowProducto =
+                    mysqli_fetch_assoc($resultadoProducto);
+
+                mysqli_stmt_close($stmtProducto);
+
+                if (!$rowProducto) {
+
+                    $mensaje =
+                        "El producto seleccionado no existe.";
+
+                    $tipo_mensaje = "error";
+
+                } else {
+
+                    $precio =
+                        (float)$rowProducto['precio'];
+
+                    $stock_actual =
+                        (int)$rowProducto['stock'];
+
+                    /* VALIDAR STOCK */
+
+                    if ($cantidad > $stock_actual) {
+
+                        $mensaje =
+                            "Stock insuficiente. Solo hay " .
+                            $stock_actual .
+                            " unidades disponibles.";
+
+                        $tipo_mensaje = "error";
+
+                    } else {
+
+                        $total =
+                            $precio * $cantidad;
+
+                        mysqli_begin_transaction($conn);
+
+                        try {
+
+                            /* GUARDAR VENTA */
+
+                            $stmtVenta = mysqli_prepare(
+                                $conn,
+                                "INSERT INTO ventas
+                                (
+                                    cliente_id,
+                                    total
+                                )
+                                VALUES (?, ?)"
+                            );
+
+                            if (!$stmtVenta) {
+                                throw new Exception(
+                                    "Error preparando la venta."
+                                );
+                            }
+
+                            mysqli_stmt_bind_param(
+                                $stmtVenta,
+                                "id",
+                                $cliente_id,
+                                $total
+                            );
+
+                            if (!mysqli_stmt_execute($stmtVenta)) {
+                                throw new Exception(
+                                    "Error registrando la venta."
+                                );
+                            }
+
+                            /* OBTENER ID DE LA VENTA */
+
+                            $venta_id =
+                                mysqli_insert_id($conn);
+
+                            mysqli_stmt_close($stmtVenta);
+
+                            /* GUARDAR DETALLE */
+
+                            $stmtDetalle = mysqli_prepare(
+                                $conn,
+                                "INSERT INTO detalle_ventas
+                                (
+                                    venta_id,
+                                    producto_id,
+                                    cantidad,
+                                    subtotal
+                                )
+                                VALUES (?, ?, ?, ?)"
+                            );
+
+                            if (!$stmtDetalle) {
+                                throw new Exception(
+                                    "Error preparando el detalle de la venta."
+                                );
+                            }
+
+                            mysqli_stmt_bind_param(
+                                $stmtDetalle,
+                                "iiid",
+                                $venta_id,
+                                $producto_id,
+                                $cantidad,
+                                $total
+                            );
+
+                            if (!mysqli_stmt_execute($stmtDetalle)) {
+                                throw new Exception(
+                                    "Error registrando el detalle de la venta."
+                                );
+                            }
+
+                            mysqli_stmt_close($stmtDetalle);
+
+                            /* ACTUALIZAR STOCK */
+
+                            $stmtStock = mysqli_prepare(
+                                $conn,
+                                "UPDATE productos
+                                 SET stock = stock - ?
+                                 WHERE id = ?
+                                 AND stock >= ?"
+                            );
+
+                            if (!$stmtStock) {
+                                throw new Exception(
+                                    "Error preparando la actualización del stock."
+                                );
+                            }
+
+                            mysqli_stmt_bind_param(
+                                $stmtStock,
+                                "iii",
+                                $cantidad,
+                                $producto_id,
+                                $cantidad
+                            );
+
+                            if (!mysqli_stmt_execute($stmtStock)) {
+                                throw new Exception(
+                                    "Error actualizando el stock."
+                                );
+                            }
+
+                            if (
+                                mysqli_stmt_affected_rows($stmtStock)
+                                === 0
+                            ) {
+                                throw new Exception(
+                                    "Stock insuficiente."
+                                );
+                            }
+
+                            mysqli_stmt_close($stmtStock);
+
+                            /* REGISTRAR SALIDA DE INVENTARIO */
+
+                            $stmtMovimiento = mysqli_prepare(
+                                $conn,
+                                "INSERT INTO movimientos_inventario
+                                (
+                                    producto_id,
+                                    tipo_movimiento,
+                                    cantidad,
+                                    referencia_id,
+                                    origen
+                                )
+                                VALUES (?, 'salida', ?, ?, 'venta')"
+                            );
+
+                            if (!$stmtMovimiento) {
+                                throw new Exception(
+                                    "Error preparando el movimiento de inventario."
+                                );
+                            }
+
+                            mysqli_stmt_bind_param(
+                                $stmtMovimiento,
+                                "iii",
+                                $producto_id,
+                                $cantidad,
+                                $venta_id
+                            );
+
+                            if (!mysqli_stmt_execute($stmtMovimiento)) {
+                                throw new Exception(
+                                    "Error registrando la salida de inventario."
+                                );
+                            }
+
+                            mysqli_stmt_close($stmtMovimiento);
+
+                            /* CONFIRMAR TRANSACCIÓN */
+
+                            mysqli_commit($conn);
+
+                            $mensaje =
+                                "Venta registrada correctamente.";
+
+                            $tipo_mensaje = "exito";
+
+                        } catch (Throwable $e) {
+
+                            mysqli_rollback($conn);
+
+                            error_log(
+                                "Error al registrar venta: " .
+                                $e->getMessage()
+                            );
+
+                            $mensaje =
+                                "Error al registrar la venta: " .
+                                $e->getMessage();
+
+                            $tipo_mensaje = "error";
+                        }
+                    }
+                }
             }
         }
     }
 }
 
+
 /* LISTAR CLIENTES */
 
 $clientes = mysqli_query(
     $conn,
-    "SELECT * FROM clientes"
+    "SELECT id, nombre
+     FROM clientes
+     ORDER BY nombre ASC"
 );
+
 
 /* LISTAR PRODUCTOS */
 
 $productos = mysqli_query(
     $conn,
-    "SELECT * FROM productos"
+    "SELECT id, nombre, precio, stock
+     FROM productos
+     ORDER BY nombre ASC"
 );
 
-/* HISTORIAL */
+
+/* HISTORIAL DE VENTAS */
 
 $ventas = mysqli_query(
     $conn,
@@ -205,18 +335,18 @@ $ventas = mysqli_query(
     FROM ventas
 
     INNER JOIN clientes
-    ON ventas.cliente_id = clientes.id
+        ON ventas.cliente_id = clientes.id
 
     INNER JOIN detalle_ventas
-    ON detalle_ventas.venta_id = ventas.id
+        ON detalle_ventas.venta_id = ventas.id
 
     INNER JOIN productos
-    ON detalle_ventas.producto_id = productos.id
+        ON detalle_ventas.producto_id = productos.id
 
     ORDER BY ventas.id DESC"
 );
 
-if(!$ventas){
+if (!$ventas) {
     die(
         "Error en historial de ventas: "
         . mysqli_error($conn)
@@ -231,6 +361,7 @@ if(!$ventas){
 <head>
 
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>Ventas</title>
 
@@ -243,13 +374,13 @@ if(!$ventas){
 
 <body>
 
-<?php include("includes/sidebar.php"); ?>
+<?php include_once("includes/sidebar.php"); ?>
 
 <div class="main">
 
     <h1>Ventas</h1>
 
-    <?php if(isset($mensaje)){ ?>
+    <?php if (isset($mensaje)) { ?>
 
         <div style="
             padding: 12px;
@@ -271,12 +402,18 @@ if(!$ventas){
 
     <?php } ?>
 
+
     <div class="form-box">
 
         <form method="POST">
 
+            <label for="cliente_id">
+                Cliente
+            </label>
+
             <select
                 name="cliente_id"
+                id="cliente_id"
                 class="form-control"
                 required
             >
@@ -285,10 +422,10 @@ if(!$ventas){
                     Seleccionar Cliente
                 </option>
 
-                <?php while(
+                <?php while (
                     $cliente =
                     mysqli_fetch_assoc($clientes)
-                ){ ?>
+                ) { ?>
 
                     <option
                         value="<?= $cliente['id'] ?>"
@@ -303,6 +440,10 @@ if(!$ventas){
             </select>
 
 
+            <label for="producto">
+                Producto
+            </label>
+
             <select
                 name="producto_id"
                 id="producto"
@@ -315,10 +456,10 @@ if(!$ventas){
                     Seleccionar Producto
                 </option>
 
-                <?php while(
+                <?php while (
                     $producto =
                     mysqli_fetch_assoc($productos)
-                ){ ?>
+                ) { ?>
 
                     <option
                         value="<?= $producto['id'] ?>"
@@ -335,6 +476,10 @@ if(!$ventas){
             </select>
 
 
+            <label for="stock_disponible">
+                Stock disponible
+            </label>
+
             <input
                 type="text"
                 id="stock_disponible"
@@ -344,6 +489,10 @@ if(!$ventas){
             >
 
 
+            <label for="precio_unitario">
+                Precio unitario
+            </label>
+
             <input
                 type="text"
                 id="precio_unitario"
@@ -352,6 +501,10 @@ if(!$ventas){
                 readonly
             >
 
+
+            <label for="cantidad">
+                Cantidad
+            </label>
 
             <input
                 type="number"
@@ -364,6 +517,10 @@ if(!$ventas){
                 required
             >
 
+
+            <label for="precio_total">
+                Precio total
+            </label>
 
             <input
                 type="text"
@@ -414,15 +571,17 @@ if(!$ventas){
 
         </tr>
 
-        <?php while(
+        <?php while (
             $venta =
             mysqli_fetch_assoc($ventas)
-        ){ ?>
+        ) { ?>
 
             <tr>
 
                 <td>
-                    <?= $venta['id'] ?>
+                    <?= htmlspecialchars(
+                        $venta['id']
+                    ) ?>
                 </td>
 
                 <td>
@@ -438,15 +597,22 @@ if(!$ventas){
                 </td>
 
                 <td>
-                    <?= $venta['cantidad'] ?>
+                    <?= htmlspecialchars(
+                        $venta['cantidad']
+                    ) ?>
                 </td>
 
                 <td>
-                    $<?= $venta['total'] ?>
+                    $<?= number_format(
+                        $venta['total'],
+                        2
+                    ) ?>
                 </td>
 
                 <td>
-                    <?= $venta['fecha'] ?>
+                    <?= htmlspecialchars(
+                        $venta['fecha']
+                    ) ?>
                 </td>
 
                 <td>
@@ -491,7 +657,7 @@ function mostrarStock() {
             select.selectedIndex
         ];
 
-    if(select.value === ""){
+    if (select.value === "") {
 
         campoStock.value = "";
         campoPrecio.value = "";
@@ -549,11 +715,11 @@ function calcularTotal() {
             "precio_total"
         );
 
-    if(
+    if (
         select.value === "" ||
         isNaN(cantidad) ||
         cantidad <= 0
-    ){
+    ) {
 
         campoTotal.value = "";
         return;
@@ -593,7 +759,7 @@ const buscador =
 
 buscador.addEventListener(
     "input",
-    function(){
+    function () {
 
         const texto =
             this.value
@@ -606,7 +772,7 @@ buscador.addEventListener(
             );
 
         filas.forEach(
-            function(fila){
+            function (fila) {
 
                 const id =
                     fila.cells[0]
@@ -623,22 +789,20 @@ buscador.addEventListener(
                         .textContent
                         .toLowerCase();
 
-                if(
+                if (
                     id.includes(texto) ||
                     cliente.includes(texto) ||
                     producto.includes(texto)
-                ){
+                ) {
 
                     fila.style.display = "";
 
-                }else{
+                } else {
 
                     fila.style.display = "none";
                 }
-
             }
         );
-
     }
 );
 
