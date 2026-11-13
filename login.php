@@ -2,40 +2,58 @@
 
 session_start();
 
-include("config/conexion.php");
+include_once("config/conexion.php");
 
 $error = "";
 
-if(isset($_POST['login'])){
+if (isset($_POST['login'])) {
 
-    $usuario = $_POST['usuario'];
-    $clave = md5($_POST['clave']);
+    $usuario = trim($_POST['usuario']);
+    $clave = $_POST['clave'];
 
-    $sql = "SELECT * FROM usuarios
-            WHERE usuario='$usuario'
-            AND clave='$clave'";
+    $sql = "SELECT id, usuario, clave, rol
+            FROM usuarios
+            WHERE usuario = ?";
 
-    $resultado = mysqli_query($conn, $sql);
+    $stmt = mysqli_prepare($conn, $sql);
 
-    if(mysqli_num_rows($resultado) > 0){
+    if ($stmt) {
 
-    $row = mysqli_fetch_assoc($resultado);
+        mysqli_stmt_bind_param($stmt, "s", $usuario);
+        mysqli_stmt_execute($stmt);
 
-    $_SESSION['usuario'] = $usuario;
-    $_SESSION['rol'] = $row['rol'];
+        $resultado = mysqli_stmt_get_result($stmt);
 
-    header("Location: dashboard.php");
+        if ($row = mysqli_fetch_assoc($resultado)) {
 
-}
-    else{
+            if (password_verify($clave, $row['clave'])) {
 
-        $error = "Usuario o contraseña incorrectos";
+                session_regenerate_id(true);
 
+                $_SESSION['usuario'] = $row['usuario'];
+                $_SESSION['rol'] = $row['rol'];
+
+                header("Location: dashboard.php");
+                exit;
+
+            } else {
+                $error = "Usuario o contraseña incorrectos";
+            }
+
+        } else {
+            $error = "Usuario o contraseña incorrectos";
+        }
+
+        mysqli_stmt_close($stmt);
+
+    } else {
+
+        error_log("Error al preparar consulta de login: " . mysqli_error($conn));
+        $error = "No fue posible iniciar sesión. Intente nuevamente.";
     }
 }
 
 ?>
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -56,26 +74,32 @@ if(isset($_POST['login'])){
 
         <h1>Sistema 360</h1>
 
-        <?php if($error != ""){ ?>
+        <?php if ($error != "") { ?>
 
             <div class="error">
-                <?= $error ?>
+                <?= htmlspecialchars($error) ?>
             </div>
 
         <?php } ?>
 
         <form method="POST">
 
+            <label for="usuario">Usuario</label>
+
             <input
                 type="text"
+                id="usuario"
                 name="usuario"
                 class="form-control"
                 placeholder="Usuario"
                 required
             >
 
+            <label for="clave">Contraseña</label>
+
             <input
                 type="password"
+                id="clave"
                 name="clave"
                 class="form-control"
                 placeholder="Contraseña"

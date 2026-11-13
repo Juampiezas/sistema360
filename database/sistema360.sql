@@ -87,3 +87,14 @@ VALUES(
     MD5('1234'),
     'Administrador'
 );
+
+CREATE TABLE movimientos_inventario (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    producto_id INT NOT NULL,
+    tipo_movimiento VARCHAR(20) NOT NULL,
+    cantidad INT NOT NULL,
+    referencia_id INT NULL,
+    origen VARCHAR(20) NOT NULL,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (producto_id) REFERENCES productos(id)
+);

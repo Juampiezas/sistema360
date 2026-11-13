@@ -90,6 +90,20 @@ basename($_SERVER['PHP_SELF'])
 
 </a>
     <a
+href="movimientos_inventario.php"
+
+class="<?=
+basename($_SERVER['PHP_SELF'])
+== 'movimientos_inventario.php'
+? 'active'
+: ''
+?>"
+>
+
+    Inventario
+
+</a>
+    <a
 href="contabilidad.php"
 
 class="<?=
