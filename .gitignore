@@ -5,3 +5,8 @@ dompdf/vendor/
 *.log
 .vscode
 config/credenciales.php
+
+.phpunit.result.cache
+coverage/
+phpinfo.txt
+phpunit.phar
